@@ -11,13 +11,12 @@ library(readr)
 # ===== データ読み込み =====
 data <- read_csv("ito_sites_master.csv", show_col_types = FALSE)
 
-# ===== カラー定義（権力構造可視化） =====
-getColor <- function(type) {
-  if (type == "墳墓") return("red")
-  if (type == "集落") return("blue")
-  if (type == "祭祀") return("green")
-  return("gray")
-}
+# ===== 遺跡種別ごとの色（データに出現する全 type を一貫して配色） =====
+type_levels <- sort(unique(data$type))
+pal_type <- colorFactor(
+  palette = grDevices::hcl.colors(length(type_levels), "Dark 3"),
+  domain = type_levels
+)
 
 # ===== UI =====
 ui <- fluidPage(
@@ -92,13 +91,32 @@ server <- function(input, output, session) {
   output$map <- renderLeaflet({
     df <- filtered()
 
-    leaflet(df) %>%
-      addTiles() %>%
-      addCircleMarkers(~lng, ~lat,
-                       color = ~sapply(type, getColor),
-                       layerId = ~name,
-                       radius = 8,
-                       popup = ~name)
+    m <- leaflet(df) %>% addTiles()
+
+    if (nrow(df) > 0) {
+      m <- m %>%
+        addCircleMarkers(
+          ~lng, ~lat,
+          radius = 8,
+          color = ~pal_type(type),
+          fillColor = ~pal_type(type),
+          fillOpacity = 0.85,
+          weight = 2,
+          opacity = 1,
+          stroke = TRUE,
+          layerId = ~name,
+          popup = ~paste0("<b>", name, "</b><br>種別：", type)
+        )
+    }
+
+    m %>%
+      addLegend(
+        position = "bottomright",
+        pal = pal_type,
+        values = type_levels,
+        title = "遺跡種別",
+        opacity = 0.9
+      )
   })
 
   observeEvent(input$map_marker_click, {

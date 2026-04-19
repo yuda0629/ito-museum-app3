@@ -20,6 +20,19 @@ pal_type <- colorFactor(
 
 # ===== UI =====
 ui <- fluidPage(
+  tags$head(
+    tags$style(HTML("
+      body { background-color: #ffffff; color: #1a1a1a; }
+      .container-fluid { background-color: #ffffff; }
+      /* 既定の .well が #f5f5f5 でサイドバーがグレーがかって見えるため白基調に */
+      .well {
+        background-color: #ffffff !important;
+        border: 1px solid #e5e5e5 !important;
+        box-shadow: none !important;
+      }
+      .tab-content { background-color: #ffffff; }
+    "))
+  ),
   titlePanel("伊都国デジタル展示 - 権力構造の可視化"),
 
   sidebarLayout(

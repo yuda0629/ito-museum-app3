@@ -10,7 +10,10 @@ library(dplyr)
 library(readr)
 
 # ===== データ読み込み =====
-data <- read_csv("ito_sites_master.csv", show_col_types = FALSE)
+data <- read_csv("ito_sites_master.csv", show_col_types = FALSE) %>%
+  mutate(marker_id = paste0("m", row_number()))
+
+era_levels <- sort(unique(as.character(data$period)))
 
 # ===== 緯度経度の表示用（WGS84 / 度） =====
 fmt_deg <- function(x) {
@@ -48,7 +51,7 @@ ui <- fluidPage(
       h3("展示ナビゲーション"),
 
       selectInput("era", "時代選択",
-                  choices = c("すべて", unique(data$period))),
+                  choices = c("すべて", era_levels)),
 
       checkboxGroupInput(
         "type", "遺跡種別",
@@ -160,7 +163,7 @@ server <- function(input, output, session) {
 
     is_sel <- rep(FALSE, nrow(df))
     if (!is.null(sel)) {
-      is_sel <- df$name == sel
+      is_sel <- df$marker_id == sel
     }
     df <- df %>%
       mutate(
@@ -180,7 +183,7 @@ server <- function(input, output, session) {
         color = df$mcol,
         fillColor = site_type_pal(df$type),
         fillOpacity = 0.88,
-        layerId = df$name,
+        layerId = df$marker_id,
         popup = paste0(
           "<b>", htmltools::htmlEscape(as.character(df$name)), "</b><br>",
           "種別：", htmltools::htmlEscape(as.character(df$type)), "<br>",
@@ -220,7 +223,7 @@ server <- function(input, output, session) {
   output$detail <- renderUI({
     req(selected_site())
 
-    site <- data %>% filter(name == selected_site()) %>% slice(1)
+    site <- data %>% filter(marker_id == selected_site()) %>% slice(1)
     lat_s <- fmt_deg(site$lat)
     lng_s <- fmt_deg(site$lng)
     lat_n <- suppressWarnings(as.numeric(site$lat))

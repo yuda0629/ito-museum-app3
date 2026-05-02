@@ -26,8 +26,11 @@ pal <- colorFactor(
   domain = period_levels
 )
 
+type_levels_ui <- sort(unique(as.character(data$type)))
+
 data <- data %>%
   mutate(
+    marker_id = paste0("m", row_number()),
     popup_html = paste0(
       "<b>", htmltools::htmlEscape(as.character(name)), "</b><br>",
       "時代：", htmltools::htmlEscape(as.character(period)), "<br>",
@@ -74,7 +77,7 @@ ui <- fluidPage(
                   selected = "すべて"),
       
       selectInput("type","種別",
-                  choices = c("すべて", unique(data$type)),
+                  choices = c("すべて", type_levels_ui),
                   selected = "すべて")
     ),
     
@@ -111,7 +114,7 @@ server <- function(input, output, session){
         color = ~pal(period),
         radius = 7,
         fillOpacity = 0.9,
-        layerId = ~name,
+        layerId = ~marker_id,
         
         popup = ~popup_html
       ) %>%
@@ -130,7 +133,7 @@ server <- function(input, output, session){
         color = ~pal(period),
         radius = 7,
         fillOpacity = 0.9,
-        layerId = ~name,
+        layerId = ~marker_id,
         popup = ~popup_html
       )
   })
@@ -147,7 +150,7 @@ server <- function(input, output, session){
     
     req(selected())
     
-    item <- data %>% filter(name == selected()) %>% slice(1)
+    item <- data %>% filter(marker_id == selected()) %>% slice(1)
     if(nrow(item) == 0) return(NULL)
     
     div(class="card",

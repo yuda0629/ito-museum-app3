@@ -182,8 +182,8 @@ server <- function(input, output, session) {
         fillOpacity = 0.88,
         layerId = df$name,
         popup = paste0(
-          "<b>", df$name, "</b><br>",
-          "種別：", df$type, "<br>",
+          "<b>", htmltools::htmlEscape(as.character(df$name)), "</b><br>",
+          "種別：", htmltools::htmlEscape(as.character(df$type)), "<br>",
           "緯度：", sprintf("%.5f", suppressWarnings(as.numeric(df$lat))),
           "　経度：",
           sprintf("%.5f", suppressWarnings(as.numeric(df$lng)))
@@ -223,24 +223,27 @@ server <- function(input, output, session) {
     site <- data %>% filter(name == selected_site()) %>% slice(1)
     lat_s <- fmt_deg(site$lat)
     lng_s <- fmt_deg(site$lng)
+    lat_n <- suppressWarnings(as.numeric(site$lat))
+    lon_n <- suppressWarnings(as.numeric(site$lng))
     osm <- paste0(
-      "https://www.openstreetmap.org/?mlat=", site$lat, "&mlon=", site$lng, "#map=15/"
+      "https://www.openstreetmap.org/?mlat=", lat_n, "&mlon=", lon_n, "#map=15/"
     )
 
     HTML(paste0(
-      "<h4>", site$name, "</h4>",
-      "<p><b>緯度（WGS84）：</b>", lat_s, "</p>",
-      "<p><b>経度（WGS84）：</b>", lng_s, "</p>",
-      "<p><small><a href=\"", osm, "\" target=\"_blank\" rel=\"noopener\">地図で開く（OpenStreetMap）</a></small></p>",
-      "<p><b>時代：</b>", site$period, "</p>",
-      "<p><b>種別：</b>", site$type, "</p>",
-      "<p>", site$desc, "</p>"
+      "<h4>", htmltools::htmlEscape(as.character(site$name)), "</h4>",
+      "<p><b>緯度（WGS84）：</b>", htmltools::htmlEscape(lat_s), "</p>",
+      "<p><b>経度（WGS84）：</b>", htmltools::htmlEscape(lng_s), "</p>",
+      "<p><small><a href=\"", htmltools::htmlEscape(osm), "\" target=\"_blank\" rel=\"noopener\">地図で開く（OpenStreetMap）</a></small></p>",
+      "<p><b>時代：</b>", htmltools::htmlEscape(as.character(site$period)), "</p>",
+      "<p><b>種別：</b>", htmltools::htmlEscape(as.character(site$type)), "</p>",
+      "<p>", htmltools::htmlEscape(as.character(site$desc)), "</p>"
     ))
   })
 
   output$compare <- renderTable({
     a <- data %>% filter(name == input$siteA) %>% slice(1)
     b <- data %>% filter(name == input$siteB) %>% slice(1)
+    req(nrow(a) >= 1L, nrow(b) >= 1L)
 
     data.frame(
       `項目` = c("緯度（WGS84）", "経度（WGS84）", "時代", "種別", "説明"),

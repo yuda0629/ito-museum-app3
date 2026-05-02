@@ -4,7 +4,7 @@ library(dplyr)
 library(readr)
 
 # ===== データ読み込み =====
-data <- read_csv("ito_sites_clean.csv", show_col_types = FALSE)
+data <- read_csv("ito_sites_master.csv", show_col_types = FALSE)
 colnames(data) <- tolower(colnames(data))
 
 # 必須列チェック
@@ -18,10 +18,22 @@ if(length(missing) > 0){
 data <- data %>% filter(!is.na(lat), !is.na(lng))
 
 # ===== カラーパレット（時代別）=====
+period_levels <- sort(unique(as.character(data$period)))
+n_period <- length(period_levels)
+base_pal <- c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00")
 pal <- colorFactor(
-  palette = c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"),
-  domain = data$period
+  palette = grDevices::colorRampPalette(base_pal)(max(n_period, 1L)),
+  domain = period_levels
 )
+
+data <- data %>%
+  mutate(
+    popup_html = paste0(
+      "<b>", htmltools::htmlEscape(as.character(name)), "</b><br>",
+      "時代：", htmltools::htmlEscape(as.character(period)), "<br>",
+      "種別：", htmltools::htmlEscape(as.character(type))
+    )
+  )
 
 # ===== UI =====
 ui <- fluidPage(
@@ -58,7 +70,7 @@ ui <- fluidPage(
       h4("フィルタ"),
       
       selectInput("period","時代",
-                  choices = c("すべて", unique(data$period)),
+                  choices = c("すべて", period_levels),
                   selected = "すべて"),
       
       selectInput("type","種別",
@@ -101,16 +113,11 @@ server <- function(input, output, session){
         fillOpacity = 0.9,
         layerId = ~name,
         
-        # 🔥 展示ラベル風ポップアップ
-        popup = ~paste0(
-          "<b>", name, "</b><br>",
-          "時代：", period, "<br>",
-          "種別：", type
-        )
+        popup = ~popup_html
       ) %>%
       addLegend("bottomright",
                 pal = pal,
-                values = ~period,
+                values = period_levels,
                 title = "時代")
   })
   
@@ -124,11 +131,7 @@ server <- function(input, output, session){
         radius = 7,
         fillOpacity = 0.9,
         layerId = ~name,
-        popup = ~paste0(
-          "<b>", name, "</b><br>",
-          "時代：", period, "<br>",
-          "種別：", type
-        )
+        popup = ~popup_html
       )
   })
   
@@ -144,7 +147,7 @@ server <- function(input, output, session){
     
     req(selected())
     
-    item <- data %>% filter(name == selected())
+    item <- data %>% filter(name == selected()) %>% slice(1)
     if(nrow(item) == 0) return(NULL)
     
     div(class="card",

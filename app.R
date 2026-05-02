@@ -1,35 +1,162 @@
-# shinyapps.io / Posit Connect 用の既定エントリ（app.R）
-# LC_CTYPE=C だと日本語 UI が <U+XXXX> になるため、parse 前に UTF-8 ロケールを試す。
-for (.loc in c("C.UTF-8", "en_US.UTF-8", "ja_JP.UTF-8")) {
-  if (!is.na(suppressWarnings(Sys.setlocale("LC_CTYPE", .loc)))) {
-    break
-  }
-}
-
 library(shiny)
 library(leaflet)
 library(dplyr)
 library(readr)
 
-.app_cmd <- commandArgs(trailingOnly = FALSE)
-.app_file <- sub("^--file=", "", .app_cmd[startsWith(.app_cmd, "--file=")])
-.app_dir <- if (length(.app_file) && nzchar(.app_file[[1]])) {
-  dirname(normalizePath(.app_file[[1]], winslash = "/", mustWork = TRUE))
-} else {
-  getwd()
+# ===== データ読み込み =====
+data <- read_csv("ito_sites_clean.csv", show_col_types = FALSE)
+colnames(data) <- tolower(colnames(data))
+
+# 必須列チェック
+required_cols <- c("name", "lat", "lng", "type", "period", "desc")
+missing <- setdiff(required_cols, colnames(data))
+if(length(missing) > 0){
+  stop(paste("不足列:", paste(missing, collapse=", ")))
 }
-.app_impl <- file.path(.app_dir, "App2_impl.R")
-if (!file.exists(.app_impl)) {
-  stop(
-    "App2_impl.R が見つかりません: ", .app_impl,
-    "\nターミナルではプロジェクト直下に cd してから実行するか、",
-    "Run App 対象をこのフォルダの app.R / App2.r にしてください。",
-    call. = FALSE
+
+# NA除去
+data <- data %>% filter(!is.na(lat), !is.na(lng))
+
+# ===== カラーパレット（時代別）=====
+pal <- colorFactor(
+  palette = c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"),
+  domain = data$period
+)
+
+# ===== UI =====
+ui <- fluidPage(
+  
+  tags$head(
+    tags$style(HTML("
+      body { background:#f5f5f5; }
+      .card {
+        border-radius:12px;
+        padding:15px;
+        background:white;
+        box-shadow:0 2px 6px rgba(0,0,0,0.1);
+        margin-top:10px;
+      }
+      .topbox {
+        background:white;
+        padding:10px;
+        margin-bottom:10px;
+        border-radius:10px;
+      }
+    "))
+  ),
+  
+  titlePanel("伊都国遺跡デジタルアーカイブ"),
+  
+  # 🔥 追加：コンセプト説明（採用対策）
+  div(class="topbox",
+      h4("本アプリについて"),
+      p("伊都国の遺跡を地図上に可視化し、時代ごとの分布や文化の変遷を直感的に理解できるよう設計した。")
+  ),
+  
+  sidebarLayout(
+    sidebarPanel(
+      h4("フィルタ"),
+      
+      selectInput("period","時代",
+                  choices = c("すべて", unique(data$period)),
+                  selected = "すべて"),
+      
+      selectInput("type","種別",
+                  choices = c("すべて", unique(data$type)),
+                  selected = "すべて")
+    ),
+    
+    mainPanel(
+      leafletOutput("map", height = "600px"),
+      uiOutput("detail")
+    )
   )
+)
+
+# ===== サーバー =====
+server <- function(input, output, session){
+  
+  # フィルタ
+  filtered <- reactive({
+    df <- data
+    
+    if(input$period != "すべて"){
+      df <- df %>% filter(period == input$period)
+    }
+    if(input$type != "すべて"){
+      df <- df %>% filter(type == input$type)
+    }
+    
+    df
+  })
+  
+  # ===== 地図 =====
+  output$map <- renderLeaflet({
+    leaflet(data) %>%
+      addTiles() %>%
+      addCircleMarkers(
+        ~lng, ~lat,
+        color = ~pal(period),
+        radius = 7,
+        fillOpacity = 0.9,
+        layerId = ~name,
+        
+        # 🔥 展示ラベル風ポップアップ
+        popup = ~paste0(
+          "<b>", name, "</b><br>",
+          "時代：", period, "<br>",
+          "種別：", type
+        )
+      ) %>%
+      addLegend("bottomright",
+                pal = pal,
+                values = ~period,
+                title = "時代")
+  })
+  
+  # 更新
+  observe({
+    leafletProxy("map", data = filtered()) %>%
+      clearMarkers() %>%
+      addCircleMarkers(
+        ~lng, ~lat,
+        color = ~pal(period),
+        radius = 7,
+        fillOpacity = 0.9,
+        layerId = ~name,
+        popup = ~paste0(
+          "<b>", name, "</b><br>",
+          "時代：", period, "<br>",
+          "種別：", type
+        )
+      )
+  })
+  
+  # ===== クリック =====
+  selected <- reactiveVal(NULL)
+  
+  observeEvent(input$map_marker_click, {
+    selected(input$map_marker_click$id)
+  })
+  
+  # ===== 展示カード =====
+  output$detail <- renderUI({
+    
+    req(selected())
+    
+    item <- data %>% filter(name == selected())
+    if(nrow(item) == 0) return(NULL)
+    
+    div(class="card",
+        h2(item$name),
+        tags$hr(),
+        p(strong("時代："), item$period),
+        p(strong("種別："), item$type),
+        br(),
+        p(item$desc)
+    )
+  })
 }
 
-setwd(.app_dir)
-
-app_env <- new.env(parent = globalenv())
-eval(parse(.app_impl, encoding = "UTF-8"), envir = app_env)
-shiny::shinyApp(ui = app_env$ui, server = app_env$server)
+# ===== 実行 =====
+shinyApp(ui, server)

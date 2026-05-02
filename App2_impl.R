@@ -109,7 +109,8 @@ ui <- fluidPage(
           value = "tab_compare",
           title = "③ 比較する",
           selectInput("siteA", "比較対象A", choices = data$name),
-          selectInput("siteB", "比較対象B", choices = data$name),
+          selectInput("siteB", "比較対象B", choices = data$name,
+                      selected = data$name[min(2L, nrow(data))]),
           tableOutput("compare")
         ),
 
@@ -242,7 +243,7 @@ server <- function(input, output, session) {
     lat_n <- suppressWarnings(as.numeric(site$lat))
     lon_n <- suppressWarnings(as.numeric(site$lng))
     osm <- paste0(
-      "https://www.openstreetmap.org/?mlat=", lat_n, "&mlon=", lon_n, "#map=15/"
+      "https://www.openstreetmap.org/#map=15/", lat_n, "/", lon_n
     )
 
     HTML(paste0(

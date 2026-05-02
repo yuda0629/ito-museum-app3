@@ -10,7 +10,20 @@ library(dplyr)
 library(readr)
 
 # ===== データ読み込み =====
-data <- read_csv("ito_sites_master.csv", show_col_types = FALSE) %>%
+data <- tryCatch(
+  read_csv("ito_sites_master.csv", show_col_types = FALSE),
+  error = function(e) stop("CSVの読み込みに失敗しました: ", conditionMessage(e), call. = FALSE)
+)
+colnames(data) <- tolower(colnames(data))
+
+required_cols <- c("name", "lat", "lng", "type", "period", "desc")
+missing_cols <- setdiff(required_cols, colnames(data))
+if (length(missing_cols) > 0) {
+  stop("不足列: ", paste(missing_cols, collapse = ", "), call. = FALSE)
+}
+
+data <- data %>%
+  filter(!is.na(lat), !is.na(lng)) %>%
   mutate(marker_id = paste0("m", row_number()))
 
 era_levels <- sort(unique(as.character(data$period)))
@@ -199,7 +212,7 @@ server <- function(input, output, session) {
     lat1 <- min(df$lat, na.rm = TRUE)
     lat2 <- max(df$lat, na.rm = TRUE)
     if (is.finite(lng1) && is.finite(lng2) && is.finite(lat1) && is.finite(lat2)) {
-      if (lng1 == lng2 && lat1 == lat2) {
+      if (abs(lng1 - lng2) < 1e-9 && abs(lat1 - lat2) < 1e-9) {
         m <- m %>% setView(lng = lng1, lat = lat1, zoom = 13)
       } else {
         m <- m %>% fitBounds(lng1, lat1, lng2, lat2)

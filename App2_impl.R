@@ -10,23 +10,23 @@ library(dplyr)
 library(readr)
 
 # ===== データ読み込み =====
-data <- tryCatch(
+sites_df <- tryCatch(
   read_csv("ito_sites_master.csv", show_col_types = FALSE),
   error = function(e) stop("CSVの読み込みに失敗しました: ", conditionMessage(e), call. = FALSE)
 )
-colnames(data) <- tolower(colnames(data))
+colnames(sites_df) <- tolower(colnames(sites_df))
 
-required_cols <- c("name", "lat", "lng", "type", "period", "desc")
-missing_cols <- setdiff(required_cols, colnames(data))
+required_cols <- c("name", "lat", "lng", "type", "period", "period_clean", "desc")
+missing_cols <- setdiff(required_cols, colnames(sites_df))
 if (length(missing_cols) > 0) {
   stop("不足列: ", paste(missing_cols, collapse = ", "), call. = FALSE)
 }
 
-data <- data %>%
+sites_df <- sites_df %>%
   filter(!is.na(lat), !is.na(lng)) %>%
   mutate(marker_id = paste0("m", row_number()))
 
-era_levels <- sort(unique(as.character(data$period)))
+era_levels <- sort(unique(as.character(sites_df$period_clean)))
 
 # ===== 緯度経度の表示用（WGS84 / 度） =====
 fmt_deg <- function(x) {
@@ -38,12 +38,37 @@ fmt_deg <- function(x) {
 }
 
 # ===== 遺跡種別ごとの配色（マスタに登場する全 type に対応） =====
-type_levels <- sort(unique(as.character(data$type)))
+type_levels <- sort(unique(as.character(sites_df$type)))
 n_types <- length(type_levels)
 type_hues <- seq(15, 375, length.out = n_types + 1)[seq_len(n_types)]
 type_palette_vec <- grDevices::hcl(h = type_hues, c = 78, l = 52)
 names(type_palette_vec) <- type_levels
 site_type_pal <- colorFactor(palette = type_palette_vec, domain = type_levels)
+
+# ===== マーカー追加ヘルパー =====
+add_markers <- function(proxy, df) {
+  proxy %>%
+    addCircleMarkers(
+      data = df,
+      lng = ~lng,
+      lat = ~lat,
+      radius = ~mr,
+      stroke = TRUE,
+      weight = ~mw,
+      color = ~mcol,
+      fillColor = site_type_pal(df$type),
+      fillOpacity = 0.88,
+      layerId = ~marker_id,
+      popup = paste0(
+        "<b>", htmltools::htmlEscape(as.character(df$name)), "</b><br>",
+        "種別：", htmltools::htmlEscape(as.character(df$type)), "<br>",
+        "緯度：", sprintf("%.5f", suppressWarnings(as.numeric(df$lat))),
+        "　経度：",
+        sprintf("%.5f", suppressWarnings(as.numeric(df$lng)))
+      ),
+      popupOptions = popupOptions(maxWidth = 240)
+    )
+}
 
 # ===== UI =====
 ui <- fluidPage(
@@ -108,9 +133,9 @@ ui <- fluidPage(
         tabPanel(
           value = "tab_compare",
           title = "③ 比較する",
-          selectInput("siteA", "比較対象A", choices = data$name),
-          selectInput("siteB", "比較対象B", choices = data$name,
-                      selected = data$name[min(2L, nrow(data))]),
+          selectInput("siteA", "比較対象A", choices = sites_df$name),
+          selectInput("siteB", "比較対象B", choices = sites_df$name,
+                      selected = sites_df$name[min(2L, nrow(sites_df))]),
           tableOutput("compare")
         ),
 
@@ -130,97 +155,27 @@ ui <- fluidPage(
 server <- function(input, output, session) {
 
   selected_site <- reactiveVal(NULL)
-  map_render_tick <- reactiveVal(0L)
-
-  observeEvent(input$view_tabs, {
-    if (identical(input$view_tabs, "tab_map")) {
-      map_render_tick(map_render_tick() + 1L)
-    }
-  }, ignoreNULL = TRUE)
 
   filtered <- reactive({
-    df <- data
+    df <- sites_df
 
     if (input$era != "すべて") {
-      df <- df %>% filter(period == input$era)
+      df <- df %>% filter(period_clean == input$era)
     }
 
     types <- input$type
-    if (is.null(types) || !length(types)) {
-      types <- type_levels
+    if (!is.null(types) && length(types)) {
+      df <- df %>% filter(type %in% types)
+    } else {
+      df <- df[0, ]
     }
-    df <- df %>% filter(type %in% types)
     df
   })
 
   output$map <- renderLeaflet({
-    map_render_tick()
-    req(identical(input$view_tabs, "tab_map"))
-
-    df <- filtered()
-    sel <- selected_site()
-
-    if (nrow(df) == 0) {
-      return(
-        leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
-          addTiles() %>%
-          setView(lng = 130.2, lat = 33.55, zoom = 10) %>%
-          addLegend(
-            "bottomright",
-            pal = site_type_pal,
-            values = type_levels,
-            title = "遺跡種別",
-            opacity = 1
-          )
-      )
-    }
-
-    is_sel <- rep(FALSE, nrow(df))
-    if (!is.null(sel)) {
-      is_sel <- df$marker_id == sel
-    }
-    df <- df %>%
-      mutate(
-        mr = ifelse(is_sel, 16L, 8L),
-        mw = ifelse(is_sel, 4L, 2L),
-        mcol = ifelse(is_sel, "#f5b000", "white")
-      )
-
-    m <- leaflet(df, options = leafletOptions(preferCanvas = TRUE)) %>%
+    leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
       addTiles() %>%
-      addCircleMarkers(
-        lng = df$lng,
-        lat = df$lat,
-        radius = df$mr,
-        stroke = TRUE,
-        weight = df$mw,
-        color = df$mcol,
-        fillColor = site_type_pal(df$type),
-        fillOpacity = 0.88,
-        layerId = df$marker_id,
-        popup = paste0(
-          "<b>", htmltools::htmlEscape(as.character(df$name)), "</b><br>",
-          "種別：", htmltools::htmlEscape(as.character(df$type)), "<br>",
-          "緯度：", sprintf("%.5f", suppressWarnings(as.numeric(df$lat))),
-          "　経度：",
-          sprintf("%.5f", suppressWarnings(as.numeric(df$lng)))
-        ),
-        popupOptions = popupOptions(maxWidth = 240)
-      )
-
-    lng1 <- min(df$lng, na.rm = TRUE)
-    lng2 <- max(df$lng, na.rm = TRUE)
-    lat1 <- min(df$lat, na.rm = TRUE)
-    lat2 <- max(df$lat, na.rm = TRUE)
-    if (is.finite(lng1) && is.finite(lng2) && is.finite(lat1) && is.finite(lat2)) {
-      if (abs(lng1 - lng2) < 1e-9 && abs(lat1 - lat2) < 1e-9) {
-        m <- m %>% setView(lng = lng1, lat = lat1, zoom = 13)
-      } else {
-        m <- m %>% fitBounds(lng1, lat1, lng2, lat2)
-      }
-    }
-
-    m %>%
+      setView(lng = 130.2, lat = 33.55, zoom = 10) %>%
       addLegend(
         "bottomright",
         pal = site_type_pal,
@@ -230,6 +185,41 @@ server <- function(input, output, session) {
       )
   })
 
+  # マーカーをフィルタ・選択状態に応じて差分更新
+  observe({
+    df <- filtered()
+    sel <- selected_site()
+
+    proxy <- leafletProxy("map") %>% clearMarkers()
+    if (nrow(df) == 0) return()
+
+    is_sel <- if (!is.null(sel)) df$marker_id == sel else rep(FALSE, nrow(df))
+    df <- df %>% mutate(
+      mr   = ifelse(is_sel, 16L, 8L),
+      mw   = ifelse(is_sel, 4L, 2L),
+      mcol = ifelse(is_sel, "#f5b000", "white")
+    )
+    add_markers(proxy, df)
+  })
+
+  # フィルタ変更時のみ表示範囲を調整（マーカークリック時はズーム維持）
+  observe({
+    df <- filtered()
+    if (nrow(df) == 0) return()
+
+    lng1 <- min(df$lng, na.rm = TRUE)
+    lng2 <- max(df$lng, na.rm = TRUE)
+    lat1 <- min(df$lat, na.rm = TRUE)
+    lat2 <- max(df$lat, na.rm = TRUE)
+    if (is.finite(lng1) && is.finite(lng2) && is.finite(lat1) && is.finite(lat2)) {
+      if (abs(lng1 - lng2) < 1e-9 && abs(lat1 - lat2) < 1e-9) {
+        leafletProxy("map") %>% setView(lng = lng1, lat = lat1, zoom = 13)
+      } else {
+        leafletProxy("map") %>% fitBounds(lng1, lat1, lng2, lat2)
+      }
+    }
+  }) %>% bindEvent(filtered())
+
   observeEvent(input$map_marker_click, {
     selected_site(input$map_marker_click$id)
   })
@@ -237,7 +227,7 @@ server <- function(input, output, session) {
   output$detail <- renderUI({
     req(selected_site())
 
-    site <- data %>% filter(marker_id == selected_site()) %>% slice(1)
+    site <- sites_df %>% filter(marker_id == selected_site()) %>% slice(1)
     lat_s <- fmt_deg(site$lat)
     lng_s <- fmt_deg(site$lng)
     lat_n <- suppressWarnings(as.numeric(site$lat))
@@ -258,8 +248,8 @@ server <- function(input, output, session) {
   })
 
   output$compare <- renderTable({
-    a <- data %>% filter(name == input$siteA) %>% slice(1)
-    b <- data %>% filter(name == input$siteB) %>% slice(1)
+    a <- sites_df %>% filter(name == input$siteA) %>% slice(1)
+    b <- sites_df %>% filter(name == input$siteB) %>% slice(1)
     req(nrow(a) >= 1L, nrow(b) >= 1L)
 
     data.frame(

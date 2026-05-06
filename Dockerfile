@@ -9,6 +9,8 @@ COPY App2_impl.R /srv/shiny-server/
 COPY App2.r /srv/shiny-server/
 COPY ito_sites_master.csv /srv/shiny-server/
 
+RUN Rscript -e "setwd('/srv/shiny-server'); source('app.R')" || true
+
 # Hugging Face Spacesは7860番ポートを使用
 EXPOSE 7860
 

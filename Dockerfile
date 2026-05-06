@@ -1,5 +1,6 @@
 FROM rocker/shiny:4.4.2
 
+# cache bust: 2026-05-06
 RUN R -e "install.packages('leaflet', repos='https://cran.rstudio.com', dependencies=TRUE)"
 RUN R -e "install.packages('dplyr', repos='https://cran.rstudio.com', dependencies=TRUE)"
 RUN R -e "install.packages('readr', repos='https://cran.rstudio.com', dependencies=TRUE)"

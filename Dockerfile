@@ -1,6 +1,9 @@
 FROM rocker/shiny:4.4.2
 
-RUN R -e "install.packages(c('leaflet','dplyr','readr','htmltools'), repos='https://cran.rstudio.com', dependencies=TRUE)"
+RUN R -e "install.packages('leaflet', repos='https://cran.rstudio.com', dependencies=TRUE)"
+RUN R -e "install.packages('dplyr', repos='https://cran.rstudio.com', dependencies=TRUE)"
+RUN R -e "install.packages('readr', repos='https://cran.rstudio.com', dependencies=TRUE)"
+RUN R -e "install.packages('htmltools', repos='https://cran.rstudio.com', dependencies=TRUE)"
 
 COPY app.R /srv/shiny-server/app.R
 COPY App2_impl.R /srv/shiny-server/

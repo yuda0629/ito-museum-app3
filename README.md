@@ -1,3 +1,12 @@
+---
+title: ito-museum-app3
+emoji: 🏛️
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # 伊都国遺跡デジタルアーカイブ
 
 ## ■ 概要

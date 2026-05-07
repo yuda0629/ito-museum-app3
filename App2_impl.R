@@ -63,8 +63,8 @@ add_markers <- function(proxy, df) {
         "<b>", htmltools::htmlEscape(as.character(df$name)), "</b><br>",
         "種別：", htmltools::htmlEscape(as.character(df$type)), "<br>",
         "緯度：", sprintf("%.5f", suppressWarnings(as.numeric(df$lat))),
-        "　経度：",
-        sprintf("%.5f", suppressWarnings(as.numeric(df$lng)))
+        "　経度：", sprintf("%.5f", suppressWarnings(as.numeric(df$lng))), "<br>",
+        htmltools::htmlEscape(as.character(df$desc))
       ),
       popupOptions = popupOptions(maxWidth = 240)
     )
@@ -163,6 +163,8 @@ server <- function(input, output, session) {
     types <- input$type
     if (!is.null(types) && length(types) > 0) {
       df <- df %>% filter(type %in% types)
+    } else {
+      df <- df[0, ]
     }
     df
   })
@@ -215,6 +217,13 @@ server <- function(input, output, session) {
     }
   }) %>% bindEvent(filtered())
 
+  # フィルタ変更時に選択をリセット（消えたマーカーの詳細が残らないよう）
+  observe({
+    input$era
+    input$type
+    selected_site(NULL)
+  }) %>% bindEvent(input$era, input$type)
+
   observeEvent(input$map_marker_click, {
     selected_site(input$map_marker_click$id)
   })
@@ -227,6 +236,7 @@ server <- function(input, output, session) {
     lng_s <- fmt_deg(site$lng)
     lat_n <- suppressWarnings(as.numeric(site$lat))
     lon_n <- suppressWarnings(as.numeric(site$lng))
+    req(is.finite(lat_n), is.finite(lon_n))
     osm <- paste0(
       "https://www.openstreetmap.org/#map=15/", lat_n, "/", lon_n
     )

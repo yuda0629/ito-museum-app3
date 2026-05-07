@@ -154,20 +154,14 @@ ui <- fluidPage(
 # ===== サーバー =====
 server <- function(input, output, session) {
 
-  selected_site <- reactiveVal(NULL)
-
   filtered <- reactive({
     df <- sites_df
-
     if (input$era != "すべて") {
       df <- df %>% filter(period_clean == input$era)
     }
-
     types <- input$type
-    if (!is.null(types) && length(types)) {
+    if (!is.null(types) && length(types) > 0) {
       df <- df %>% filter(type %in% types)
-    } else {
-      df <- df[0, ]
     }
     df
   })

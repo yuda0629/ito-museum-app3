@@ -153,6 +153,7 @@ ui <- fluidPage(
 
 # ===== サーバー =====
 server <- function(input, output, session) {
+  selected_site <- reactiveVal(NULL)
 
   filtered <- reactive({
     df <- sites_df
